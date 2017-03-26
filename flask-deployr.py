@@ -165,7 +165,7 @@ class Application(db.Model):
         """
         requirements_file = os.path.join(self.path, 'requirements.txt')
         if os.path.isfile(requirements_file):
-            command = ['pip', 'install', '-r', kwargs['requirements_file'],]
+            command = ['pip', 'install', '-r', requirements_file,]
             subp = subprocess.Popen(command, cwd=self.path)
             subp.wait()
 
@@ -219,7 +219,7 @@ class Application(db.Model):
 
     def start(self):
         """
-        Start the uwsgi stie for this applicaton
+        Start the uwsgi site for this applicaton
         """
 
         self.uwsgi_write_config()
@@ -268,6 +268,12 @@ class ApplicationAdmin(ModelView):
         model.delete_all_application_files()
 
     def after_model_change(self, form, model, is_created):
+        if is_created:
+            model.git_clone()
+            model.venv_create()
+        else:
+            model.git_pull()
+ 
         model.restart()
 
     @action('pull', 'Pull', 'Are you sure you want to fetch/merge the selected applications?')
