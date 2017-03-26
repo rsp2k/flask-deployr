@@ -28,6 +28,8 @@ from flask_admin.contrib.sqla import ModelView
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.hybrid import hybrid_property
 
+import giturlparse
+
 CHECKOUT_BASE = '/home/deploy'
 VASSALS_DIR = '/etc/uwsgi/vassals'
 
@@ -81,7 +83,6 @@ class EnvironmentVar(db.Model):
 
 class Application(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(255), nullable=False)
     name = db.Column(db.String(255), unique=True, nullable=False)
     repo_url = db.Column(db.String(255), unique=True, nullable=False)
     webhook_secret = db.Column(db.String(255), nullable=False, server_default='')
@@ -93,6 +94,18 @@ class Application(db.Model):
     @hybrid_property
     def path(self):
         return os.path.join(CHECKOUT_BASE, self.name)
+
+    def git_host(self):
+        p = giturlparse.parse(clone_url)
+        return p.host
+ 
+    def git_repo(self):
+        p = giturlparse.parse(clone_url)
+        return p.repo
+ 
+    def git_owner(self):
+        p = giturlparse.parse(clone_url)
+        return p.owner
 
     def git_clone(self):
         """
@@ -318,13 +331,19 @@ def webhook():
 
     payload = request.get_json()
 
-    repo_name = payload['repository']['name']
+    clone_url = payload['repository']['clone_url']
 
-    if repo_name is __name__:
+    p = giturlparse.parse(clone_url)
+
+    if __name__ is p.repo:
         return jsonify({'msg': "cant deploy repo named %s" % __name__})
 
-    application = Application.query.filter_by(name=repo_name).first()
-    if not application: abort(404)
+    repo_url = p.url2https
+
+    application = Application.query.filter_by(repo_url=repo_url).first()
+    if not application:
+        print('Unknown repo URL: %s' % repo_url)
+        abort(404)
 
     if application.webhook_secret:
         if not valid_request_signature(application.webhook_secret, request):
