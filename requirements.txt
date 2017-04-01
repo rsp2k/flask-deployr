@@ -22,7 +22,6 @@ konch==2.3.0
 MarkupSafe==1.0
 packaging==16.8
 passlib==1.7.1
-pkg-resources==0.0.0
 prompt-toolkit==1.0.13
 ptpython==0.36
 pycparser==2.17

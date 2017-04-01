@@ -150,37 +150,33 @@ class Application(db.Model):
 
     @hybrid_property
     def venv_path(self):
-        return os.path.join(self.path, '.venv')
-
-    def venv_destroy(self):
-        """
-        remove venv directory
-        """
-        if (os.path.exists(self.venv_path) and os.path.isdir(self.venv_path)):
-           shutil.rmtree(self.venv_path)
+        return os.path.join(self.path, 'venv')
 
     def venv_create(self):
         """
-        Create python virtual environment if necessary
+        Create python virtual environment
     
         https://docs.python.org/3/library/venv.html
         """
-        if not (os.path.exists(self.venv_path) and os.path.isdir(self.venv_path)):
-            builder = venv.EnvBuilder()
-            builder.create(self.venv_path)
-            return True
-
-        return False
+        prompt = self.name
+        builder = venv.EnvBuilder(clear=True)
+        builder.create(self.venv_path)
 
     def pip_install_requirements(self):
         """
-        Pip install from requirements.txt if file exits
+        Pip install into virtualenv from requirements.txt if file exits
         """
-        requirements_file = os.path.join(self.path, 'requirements.txt')
-        if os.path.isfile(requirements_file):
-            command = ['pip', 'install', '-r', requirements_file,]
-            subp = subprocess.Popen(command, cwd=self.path)
-            subp.wait()
+
+        try:
+            venv_python = os.path.join(self.venv_path, 'bin', 'python')
+
+            requirements_file = os.path.join(self.path, 'requirements.txt')
+            if os.path.isfile(requirements_file):
+                command = [venv_python, '-m', 'pip', 'install', '-r', requirements_file,]
+                subp = subprocess.Popen(command, cwd=self.path)
+                subp.wait()
+        finally:
+            pass
 
 
     @hybrid_property
@@ -203,13 +199,14 @@ class Application(db.Model):
             'virtualenv': self.venv_path,
             'chdir': self.path,
             'envdir': self.envdir_path,
-            'module': '%n:app',
+            'wsgi-file': 'uwsgi.py',
 
             'socket': '/tmp/%n.sock',
             'chmod-socket': '777',
 
             'plugins': 'python3,logfile',
 #            'python-autoreload': '3',
+#            'fs-brutal-reload': self.path,
     
             'logger': logger_path,
             'req-logger': reqlog_path,
@@ -260,6 +257,18 @@ class Application(db.Model):
         self.stop()
         self.start()
 
+    def update(self):
+        """
+        Update (clone or pull) the application, rebuild venv and (re)start
+        """
+        if not (os.path.exists(self.path) and os.path.isdir(self.path)):
+            self.git_clone()
+        else:
+            self.git_pull()
+
+        #self.venv_create()
+        #self.pip_install_requirements()
+
     def delete_all_application_files(self):
         """
         Deletes files when application is deleted
@@ -273,27 +282,20 @@ class Application(db.Model):
 
 
 class ApplicationAdmin(ModelView):
-#    column_display_pk = True
-#    form_columns = ['repo_url', 'name', 'webhook_secret']
     inline_models = (EnvironmentVar,)
 
     def after_model_delete(self, model):
         model.delete_all_application_files()
 
     def after_model_change(self, form, model, is_created):
-        if is_created:
-            model.git_clone()
-            model.venv_create()
-        else:
-            model.git_pull()
- 
+        model.update()
         model.restart()
 
-    @action('pull', 'Pull', 'Are you sure you want to fetch/merge the selected applications?')
-    def action_pull(self, ids):
+    @action('update', 'Update', 'Are you sure you want to clone or fetch/merge the selected applications and restart?')
+    def action_update(self, ids):
         for id_ in ids:
             a = Application.query.get(id_)
-            a.git_pull()
+            a.update()
 
     @action('restart', 'Restart', 'Are you sure you want to restart the selected applications?')
     def action_restart(self, ids):
@@ -349,14 +351,7 @@ def webhook():
         if not valid_request_signature(application.webhook_secret, request):
             abort(400)
 
-    path = os.path.join(CHECKOUT_BASE, application.name)
-    if not (os.path.exists(path) and os.path.isdir(path)):
-        application.git_clone()
-        application.venv_create()
-    else:
-        application.git_pull()
-
-    application.pip_install_requirements()
+    application.update()
     application.restart()
 
     """
