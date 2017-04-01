@@ -4,6 +4,16 @@ Provides and admin page and GitHub webhook receiver. When it receives a "commit"
 
 Currently only python / pip are supported, node.js / npm will be added in the future. Pull requests welcome!
 
+Attempts have been made at using venv and virtualenv modules to 
+
+## uWSGI Emperor Mode 'vassal' support
+A uWSGI vassal configuration file is created each time the webhook fires or the app is manually updated (from web admin page). This causes uWSGI to restart the app gracefully.
+
+The uWSGI file created will create a socket named '/tmp/**app_name**/.sock'
+
+## NGINX Example Config
+The example nginx config uses whatever hostname was supplied and attempts to connect to a like named socket named '/tmp/**hostname**.sock'. Requests to the '/static/' prefix are sent to /home/depoy/**hostname**/static
+
 ## Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
