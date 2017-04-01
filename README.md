@@ -56,7 +56,10 @@ Give an example
 
 ## Deployment
 
-Add additional notes about how to deploy this on a live system
+Setup uWSGI w/Emperor Support, set the VASSALS_DIR
+
+## Repository Webhook
+Setup a repository "commit" webhook that points to the URL that serves this app (/webhook)
 
 ## Built With
 
